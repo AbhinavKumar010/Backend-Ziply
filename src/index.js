@@ -36,12 +36,6 @@ app.use(async (req, res, next) => {
   }
 });
 
-// Connect to database
-connectDB().catch(err => {
-  console.error('Failed to connect to database:', err);
-  process.exit(1);
-});
-
 // Socket.IO connection handling
 io.on('connection', (socket) => {
   console.log('New client connected');
@@ -68,8 +62,24 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: 'Something went wrong!' });
 });
 
-// Start server
-const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-}); 
+// Start server function
+const startServer = async () => {
+  try {
+    // First connect to database
+    console.log('Connecting to database...');
+    await connectDB();
+    console.log('Database connected successfully');
+
+    // Then start the server
+    const PORT = process.env.PORT || 5000;
+    server.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+};
+
+// Start the server
+startServer(); 

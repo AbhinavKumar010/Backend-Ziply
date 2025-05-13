@@ -4,16 +4,23 @@ const mongoose = require('mongoose');
 const options = {
   useNewUrlParser: true,
   useUnifiedTopology: true,
-  serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
-  socketTimeoutMS: 45000, // Close sockets after 45s of inactivity
-  family: 4 // Use IPv4, skip trying IPv6
+  serverSelectionTimeoutMS: 30000, // Increase timeout for deployment
+  socketTimeoutMS: 45000,
+  family: 4,
+  maxPoolSize: 10, // Maximum number of connections in the pool
+  minPoolSize: 5,  // Minimum number of connections in the pool
+  retryWrites: true,
+  w: 'majority',
+  heartbeatFrequencyMS: 2000, // Check server status every 2 seconds
+  connectTimeoutMS: 30000, // Give up initial connection after 30 seconds
 };
 
 // Connection state
 let isConnected = false;
 let isConnecting = false;
 let retryCount = 0;
-const MAX_RETRIES = 5;
+const MAX_RETRIES = 10; // Increase max retries for deployment
+const RETRY_DELAY = 5000; // 5 seconds between retries
 
 // Connection event handlers
 mongoose.connection.on('connected', () => {
@@ -51,7 +58,14 @@ const connectDB = async () => {
     isConnecting = true;
     console.log('Connecting to MongoDB...');
     
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/ziply', options);
+    // Get MongoDB URI from environment
+    const mongoURI = process.env.MONGODB_URI;
+    if (!mongoURI) {
+      throw new Error('MONGODB_URI is not defined in environment variables');
+    }
+
+    console.log('Attempting to connect to MongoDB Atlas...');
+    await mongoose.connect(mongoURI, options);
     
   } catch (error) {
     console.error('MongoDB connection error:', error);
@@ -59,11 +73,12 @@ const connectDB = async () => {
     
     if (retryCount < MAX_RETRIES) {
       retryCount++;
-      console.log(`Retrying connection (${retryCount}/${MAX_RETRIES})...`);
-      setTimeout(connectDB, 5000); // Retry after 5 seconds
+      console.log(`Retrying connection (${retryCount}/${MAX_RETRIES}) in ${RETRY_DELAY/1000} seconds...`);
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+      return connectDB(); // Retry connection
     } else {
       console.error('Max retry attempts reached. Please check your database connection.');
-      process.exit(1);
+      throw new Error('Failed to connect to MongoDB after multiple attempts');
     }
   }
 };
@@ -75,6 +90,18 @@ const checkConnection = () => {
   }
   return true;
 };
+
+// Graceful shutdown
+process.on('SIGINT', async () => {
+  try {
+    await mongoose.connection.close();
+    console.log('MongoDB connection closed through app termination');
+    process.exit(0);
+  } catch (err) {
+    console.error('Error during MongoDB disconnection:', err);
+    process.exit(1);
+  }
+});
 
 module.exports = {
   connectDB,
