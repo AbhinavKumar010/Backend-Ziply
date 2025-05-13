@@ -1,9 +1,9 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const http = require('http');
 const socketIo = require('socket.io');
+const { connectDB, checkConnection } = require('./config/database');
 
 // Load environment variables
 dotenv.config();
@@ -25,10 +25,22 @@ app.set('io', io);
 app.use(cors());
 app.use(express.json());
 
-// Database connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/ziply')
-  .then(() => console.log('Connected to MongoDB'))
-  .catch((err) => console.error('MongoDB connection error:', err));
+// Database connection middleware
+app.use(async (req, res, next) => {
+  try {
+    checkConnection();
+    next();
+  } catch (error) {
+    console.error('Database connection check failed:', error);
+    res.status(503).json({ message: 'Database connection not available' });
+  }
+});
+
+// Connect to database
+connectDB().catch(err => {
+  console.error('Failed to connect to database:', err);
+  process.exit(1);
+});
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
@@ -47,7 +59,6 @@ io.on('connection', (socket) => {
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/products', require('./routes/products'));
-app.use('/api/orders', require('./routes/orders'));
 app.use('/api/users', require('./routes/users'));
 
 // Error handling middleware
