@@ -3,6 +3,7 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const http = require('http');
 const socketIo = require('socket.io');
+const path = require('path');
 const { connectDB, checkConnection } = require('./config/database');
 
 // Load environment variables
@@ -24,6 +25,39 @@ app.set('io', io);
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Set proper MIME types
+app.use((req, res, next) => {
+  if (req.url.endsWith('.js')) {
+    res.type('application/javascript');
+  } else if (req.url.endsWith('.mjs')) {
+    res.type('application/javascript');
+  } else if (req.url.endsWith('.jsx')) {
+    res.type('application/javascript');
+  }
+  next();
+});
+
+// Serve static files from the client build directory if in production
+if (process.env.NODE_ENV === 'production') {
+  const clientBuildPath = path.join(__dirname, '../../client/dist');
+  app.use(express.static(clientBuildPath, {
+    setHeaders: (res, path) => {
+      if (path.endsWith('.js')) {
+        res.setHeader('Content-Type', 'application/javascript');
+      } else if (path.endsWith('.mjs')) {
+        res.setHeader('Content-Type', 'application/javascript');
+      } else if (path.endsWith('.jsx')) {
+        res.setHeader('Content-Type', 'application/javascript');
+      }
+    }
+  }));
+
+  // Handle client-side routing
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(clientBuildPath, 'index.html'));
+  });
+}
 
 // Database connection middleware
 app.use(async (req, res, next) => {
@@ -50,7 +84,7 @@ io.on('connection', (socket) => {
   });
 });
 
-// Routes
+// API Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/products', require('./routes/products'));
 app.use('/api/orders', require('./routes/orders'));
@@ -82,4 +116,4 @@ const startServer = async () => {
 };
 
 // Start the server
-startServer(); 
+startServer();
