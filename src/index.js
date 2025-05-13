@@ -26,74 +26,43 @@ app.set('io', io);
 app.use(cors());
 app.use(express.json());
 
-// Configure MIME types for JavaScript modules
-app.use((req, res, next) => {
-  // Set proper MIME types for JavaScript files
-  if (req.url.endsWith('.js')) {
-    res.setHeader('Content-Type', 'application/javascript');
-  } else if (req.url.endsWith('.mjs')) {
-    res.setHeader('Content-Type', 'application/javascript');
-  } else if (req.url.endsWith('.jsx')) {
-    res.setHeader('Content-Type', 'application/javascript');
-  } else if (req.url.endsWith('.css')) {
-    res.setHeader('Content-Type', 'text/css');
-  } else if (req.url.endsWith('.json')) {
-    res.setHeader('Content-Type', 'application/json');
-  } else if (req.url.endsWith('.png')) {
-    res.setHeader('Content-Type', 'image/png');
-  } else if (req.url.endsWith('.jpg') || req.url.endsWith('.jpeg')) {
-    res.setHeader('Content-Type', 'image/jpeg');
-  } else if (req.url.endsWith('.svg')) {
-    res.setHeader('Content-Type', 'image/svg+xml');
-  } else if (req.url.endsWith('.ico')) {
-    res.setHeader('Content-Type', 'image/x-icon');
-  }
-  next();
-});
-
-// Serve static files from the client build directory if in production
-if (process.env.NODE_ENV === 'production') {
-  const clientBuildPath = path.join(__dirname, '../../client/dist');
-  
-  // Serve static files with proper MIME types
-  app.use(express.static(clientBuildPath, {
-    setHeaders: (res, filePath) => {
-      // Set proper MIME types based on file extension
-      if (filePath.endsWith('.js')) {
+// Serve static files from the client build directory
+const clientBuildPath = path.join(__dirname, '../../client/dist');
+app.use(express.static(clientBuildPath, {
+  setHeaders: (res, filePath) => {
+    // Set proper MIME types based on file extension
+    if (filePath.endsWith('.js')) {
+      // Check if it's a module script
+      if (filePath.includes('/assets/') || filePath.includes('/chunks/')) {
         res.setHeader('Content-Type', 'application/javascript');
-      } else if (filePath.endsWith('.mjs')) {
-        res.setHeader('Content-Type', 'application/javascript');
-      } else if (filePath.endsWith('.jsx')) {
-        res.setHeader('Content-Type', 'application/javascript');
-      } else if (filePath.endsWith('.css')) {
-        res.setHeader('Content-Type', 'text/css');
-      } else if (filePath.endsWith('.json')) {
-        res.setHeader('Content-Type', 'application/json');
-      } else if (filePath.endsWith('.png')) {
-        res.setHeader('Content-Type', 'image/png');
-      } else if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) {
-        res.setHeader('Content-Type', 'image/jpeg');
-      } else if (filePath.endsWith('.svg')) {
-        res.setHeader('Content-Type', 'image/svg+xml');
-      } else if (filePath.endsWith('.ico')) {
-        res.setHeader('Content-Type', 'image/x-icon');
+      } else {
+        res.setHeader('Content-Type', 'text/javascript');
       }
-    },
-    // Enable caching for static assets
-    maxAge: '1y',
-    // Don't send 304 responses
-    etag: false
-  }));
-
-  // Handle client-side routing - serve index.html for all routes
-  app.get('*', (req, res, next) => {
-    // Skip API routes
-    if (req.path.startsWith('/api/')) {
-      return next();
+    } else if (filePath.endsWith('.mjs')) {
+      res.setHeader('Content-Type', 'application/javascript');
+    } else if (filePath.endsWith('.jsx')) {
+      res.setHeader('Content-Type', 'application/javascript');
+    } else if (filePath.endsWith('.css')) {
+      res.setHeader('Content-Type', 'text/css');
+    } else if (filePath.endsWith('.json')) {
+      res.setHeader('Content-Type', 'application/json');
+    } else if (filePath.endsWith('.png')) {
+      res.setHeader('Content-Type', 'image/png');
+    } else if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) {
+      res.setHeader('Content-Type', 'image/jpeg');
+    } else if (filePath.endsWith('.svg')) {
+      res.setHeader('Content-Type', 'image/svg+xml');
+    } else if (filePath.endsWith('.ico')) {
+      res.setHeader('Content-Type', 'image/x-icon');
     }
-    res.sendFile(path.join(clientBuildPath, 'index.html'));
-  });
-}
+  },
+  // Enable caching for static assets
+  maxAge: '1y',
+  // Don't send 304 responses
+  etag: false,
+  // Enable fallthrough to allow the catch-all route to handle 404s
+  fallthrough: true
+}));
 
 // Database connection middleware
 app.use(async (req, res, next) => {
@@ -125,6 +94,31 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/products', require('./routes/products'));
 app.use('/api/orders', require('./routes/orders'));
 app.use('/api/users', require('./routes/users'));
+
+// Handle client-side routing - serve index.html for all routes
+app.get('*', (req, res, next) => {
+  // Skip API routes
+  if (req.path.startsWith('/api/')) {
+    return next();
+  }
+  
+  // Check if the request is for a static file
+  const staticFileExtensions = ['.js', '.css', '.png', '.jpg', '.jpeg', '.svg', '.ico', '.json'];
+  const isStaticFile = staticFileExtensions.some(ext => req.path.endsWith(ext));
+  
+  if (isStaticFile) {
+    // If it's a static file and we get here, it means the file wasn't found
+    return res.status(404).json({ error: 'Static file not found' });
+  }
+  
+  // For all other routes, serve the index.html
+  res.sendFile(path.join(clientBuildPath, 'index.html'), (err) => {
+    if (err) {
+      console.error('Error sending index.html:', err);
+      res.status(500).json({ error: 'Error serving index.html' });
+    }
+  });
+});
 
 // Error handling middleware
 app.use((err, req, res, next) => {
