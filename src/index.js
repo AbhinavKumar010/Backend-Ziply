@@ -26,14 +26,27 @@ app.set('io', io);
 app.use(cors());
 app.use(express.json());
 
-// Set proper MIME types
+// Configure MIME types for JavaScript modules
 app.use((req, res, next) => {
+  // Set proper MIME types for JavaScript files
   if (req.url.endsWith('.js')) {
-    res.type('application/javascript');
+    res.setHeader('Content-Type', 'application/javascript');
   } else if (req.url.endsWith('.mjs')) {
-    res.type('application/javascript');
+    res.setHeader('Content-Type', 'application/javascript');
   } else if (req.url.endsWith('.jsx')) {
-    res.type('application/javascript');
+    res.setHeader('Content-Type', 'application/javascript');
+  } else if (req.url.endsWith('.css')) {
+    res.setHeader('Content-Type', 'text/css');
+  } else if (req.url.endsWith('.json')) {
+    res.setHeader('Content-Type', 'application/json');
+  } else if (req.url.endsWith('.png')) {
+    res.setHeader('Content-Type', 'image/png');
+  } else if (req.url.endsWith('.jpg') || req.url.endsWith('.jpeg')) {
+    res.setHeader('Content-Type', 'image/jpeg');
+  } else if (req.url.endsWith('.svg')) {
+    res.setHeader('Content-Type', 'image/svg+xml');
+  } else if (req.url.endsWith('.ico')) {
+    res.setHeader('Content-Type', 'image/x-icon');
   }
   next();
 });
@@ -41,20 +54,43 @@ app.use((req, res, next) => {
 // Serve static files from the client build directory if in production
 if (process.env.NODE_ENV === 'production') {
   const clientBuildPath = path.join(__dirname, '../../client/dist');
+  
+  // Serve static files with proper MIME types
   app.use(express.static(clientBuildPath, {
-    setHeaders: (res, path) => {
-      if (path.endsWith('.js')) {
+    setHeaders: (res, filePath) => {
+      // Set proper MIME types based on file extension
+      if (filePath.endsWith('.js')) {
         res.setHeader('Content-Type', 'application/javascript');
-      } else if (path.endsWith('.mjs')) {
+      } else if (filePath.endsWith('.mjs')) {
         res.setHeader('Content-Type', 'application/javascript');
-      } else if (path.endsWith('.jsx')) {
+      } else if (filePath.endsWith('.jsx')) {
         res.setHeader('Content-Type', 'application/javascript');
+      } else if (filePath.endsWith('.css')) {
+        res.setHeader('Content-Type', 'text/css');
+      } else if (filePath.endsWith('.json')) {
+        res.setHeader('Content-Type', 'application/json');
+      } else if (filePath.endsWith('.png')) {
+        res.setHeader('Content-Type', 'image/png');
+      } else if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) {
+        res.setHeader('Content-Type', 'image/jpeg');
+      } else if (filePath.endsWith('.svg')) {
+        res.setHeader('Content-Type', 'image/svg+xml');
+      } else if (filePath.endsWith('.ico')) {
+        res.setHeader('Content-Type', 'image/x-icon');
       }
-    }
+    },
+    // Enable caching for static assets
+    maxAge: '1y',
+    // Don't send 304 responses
+    etag: false
   }));
 
-  // Handle client-side routing
-  app.get('*', (req, res) => {
+  // Handle client-side routing - serve index.html for all routes
+  app.get('*', (req, res, next) => {
+    // Skip API routes
+    if (req.path.startsWith('/api/')) {
+      return next();
+    }
     res.sendFile(path.join(clientBuildPath, 'index.html'));
   });
 }
